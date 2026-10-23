@@ -1,26 +1,37 @@
 'use strict';
 
-const APP_VERSION = '1.0.0';
+const APP_VERSION = '1.1.0';
 const STORE_KEY = 'rutina.v1';
 
 /* ---------- Estado ---------- */
 
 function freshState() {
-  return { version: 1, week: 1, done: [], checks: {}, log: [] };
+  return { version: 2, week: 1, done: [], checks: {}, log: [], notes: [] };
+}
+
+function migrate(s) {
+  // v1 → v2: la rutina pasa de ejercicios sueltos a bloques; las marcas antiguas no sirven.
+  if (!s.version || s.version < 2) {
+    s.checks = {};
+    s.version = 2;
+  }
+  if (!Array.isArray(s.notes)) s.notes = [];
+  return s;
 }
 
 function loadState() {
   try {
     const raw = localStorage.getItem(STORE_KEY);
     if (!raw) return freshState();
-    const s = JSON.parse(raw);
-    return Object.assign(freshState(), s);
+    const saved = JSON.parse(raw);
+    return migrate(Object.assign(freshState(), saved, { version: saved.version || 1 }));
   } catch (e) {
     return freshState();
   }
 }
 
 let state = loadState();
+try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) { /* nada */ }
 
 function save() {
   try {
@@ -61,8 +72,8 @@ const phaseOf = (week) => (week <= 4 ? 0 : week <= 8 ? 1 : 2);
 const isDeload = (week) => DELOAD_WEEKS.includes(week);
 const sessionById = (id) => SESSIONS.find((s) => s.id === id);
 
-function exercisesOf(session) {
-  return session.warmup ? [WARMUP, ...session.exercises] : session.exercises.slice();
+function blocksOf(session) {
+  return session.warmup ? [WARMUP, ...session.blocks] : session.blocks.slice();
 }
 
 function nextSession() {
@@ -126,6 +137,9 @@ const I = {
   download: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>',
   upload: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20V9M7 14l5-5 5 5M5 4h14"/></svg>',
   run: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="14" cy="4.5" r="1.8"/><path d="M8 21l3-6 3 2v5M6 12l3-4 4 1 3 3 3 1"/></svg>',
+  comment: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/><path d="M9 10h6"/></svg>',
+  mic: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>',
+  send: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12l16-8-6 16-3-7z"/></svg>',
   tabRutina: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 12l3 3 5-6"/></svg>',
   tabControl: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h10M4 12h16M4 18h7"/></svg>',
   tabHist: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>',
@@ -141,12 +155,11 @@ function viewRutina() {
   let hero;
   if (next) {
     const s = next;
-    const count = s.exercises.length;
     hero = `
       <section class="hero" aria-label="Entreno de hoy">
         <p class="eyebrow">Toca hoy</p>
         <h2>${s.id} · ${esc(s.title)}</h2>
-        <p class="sub">${s.warmup ? 'Calentamiento + ' : ''}${count} ejercicios · 30 min</p>
+        <p class="sub">${s.warmup ? 'Calentamiento + ' : ''}${s.blocks.length} bloques · ${s.minutes} min</p>
         <a class="btn" href="#/dia/${s.id}">Empezar</a>
       </section>`;
   } else {
@@ -162,9 +175,10 @@ function viewRutina() {
     const done = state.done.includes(s.id);
     const current = next && next.id === s.id;
     const checks = (state.checks[s.id] || []).length;
-    const total = exercisesOf(s).length;
+    const total = blocksOf(s).length;
     const badge = done ? `<span class="badge ok">${I.check}</span>` : current ? `<span class="badge now">${i + 1}</span>` : `<span class="badge">${i + 1}</span>`;
-    const detail = done ? `Día ${i + 1} · Completado` : current ? `Día ${i + 1} · Hoy${checks ? ` · ${checks} de ${total} hechos` : ''}` : `Día ${i + 1} · Pendiente${checks ? ` · ${checks} de ${total} hechos` : ''}`;
+    const progress = checks ? ` · ${checks} de ${total} bloques` : '';
+    const detail = done ? `${s.day} · Completado` : current ? `${s.day} · Hoy${progress}` : `${s.day} · Pendiente${progress}`;
     return `<a class="item ${current ? 'current' : ''}" href="#/dia/${s.id}">${badge}<span class="body"><span class="title">${s.id} · ${esc(s.title)}</span><span class="detail" style="display:block">${detail}</span></span></a>`;
   }).join('');
 
@@ -185,28 +199,40 @@ function viewDia(id) {
   const s = sessionById(id);
   if (!s) return viewRutina();
   const phase = phaseOf(state.week);
-  const exs = exercisesOf(s);
+  const blocks = blocksOf(s);
   const checks = state.checks[s.id] || [];
   const done = state.done.includes(s.id);
   const idx = SESSIONS.indexOf(s) + 1;
+  let n = 0;
 
-  const rows = exs.map((ex) => {
-    const on = checks.includes(ex.id);
-    const steps = ex.steps ? `<ul class="steps">${ex.steps.map((st) => `<li><a href="${st.video}" target="_blank" rel="noopener">${esc(st.text)}</a></li>`).join('')}</ul>` : '';
-    const video = ex.video ? `<a class="icon-btn" href="${ex.video}" target="_blank" rel="noopener" aria-label="Ver vídeo de ${esc(ex.name)}">${I.play}</a>` : '';
+  const cards = blocks.map((b) => {
+    const on = checks.includes(b.id);
+    const isWarm = b.id === WARMUP.id;
+    if (!isWarm) n++;
+    const label = isWarm ? 'Calentamiento' : `Bloque ${n} · ${b.title}`;
+    const steps = b.steps ? `<ul class="steps">${b.steps.map((st) => `<li><a href="${st.video}" target="_blank" rel="noopener">${esc(st.text)}</a></li>`).join('')}</ul>` : '';
+    const items = b.items.map((it) => `
+        <div class="block-item">
+          <p>${esc(it.name)}${it.dose[phase] ? ` · <span class="dim">${esc(it.dose[phase])}</span>` : ''}</p>
+          <a class="icon-btn small" href="${it.video}" target="_blank" rel="noopener" aria-label="Ver vídeo de ${esc(it.name)}">${I.play}</a>
+        </div>`).join('');
     return `
-      <div class="card" style="padding:10px 12px">
-        <div class="row ${on ? 'done' : ''}">
-          <button class="check ${on ? 'on' : ''}" data-action="toggle" data-s="${s.id}" data-ex="${ex.id}" aria-pressed="${on}" aria-label="${on ? 'Desmarcar' : 'Marcar'} ${esc(ex.name)}"><span>${on ? I.check : ''}</span></button>
-          <div style="flex:1;min-width:0"><p class="title" style="font-weight:600;font-size:15px;${on ? 'color:var(--muted);text-decoration:line-through' : ''}">${esc(ex.name)}</p><p class="muted" style="margin-top:2px;color:var(--text-2)">${esc(ex.dose[phase])}</p></div>
-          ${video}
+      <section class="block ${on ? 'is-done' : ''}">
+        <div class="row">
+          <button class="check ${on ? 'on' : ''}" data-action="toggle" data-s="${s.id}" data-b="${b.id}" aria-pressed="${on}" aria-label="${on ? 'Desmarcar' : 'Marcar'} ${esc(label)}"><span>${on ? I.check : ''}</span></button>
+          <div style="flex:1;min-width:0">
+            <p class="block-label">${esc(label)}</p>
+            <p class="block-rounds">${esc(b.rounds[phase])}</p>
+          </div>
+          ${b.pause ? `<span class="pill">${esc(b.pause)}</span>` : ''}
         </div>
-        ${steps}
-      </div>`;
+        ${on ? '' : items + steps}
+      </section>`;
   }).join('');
 
   const notes = [];
   if (isDeload(state.week)) notes.push('Semana de descarga: haz un 40 % menos de series.');
+  if (s.hyroxNote) notes.push(HYROX_NOTE);
   if (s.note) notes.push(s.note);
 
   document.body.classList.add('has-footer');
@@ -216,20 +242,23 @@ function viewDia(id) {
 
   return `
     <header class="head">
-      <a class="back" href="#/rutina">${I.back}Rutina</a>
-      <p class="eyebrow">Día ${idx} de 5 · ${s.day} · Semana ${state.week}</p>
+      <div class="row" style="justify-content:space-between">
+        <a class="back" href="#/rutina">${I.back}Rutina</a>
+        <a class="icon-btn" href="#/mejoras/${s.id}" aria-label="Anotar una mejora para la app">${I.comment}</a>
+      </div>
+      <p class="eyebrow">Día ${idx} de 5 · ${s.day} · Semana ${state.week} · ${s.minutes} min</p>
       <h1 style="font-size:26px">${s.id} · ${esc(s.title)}</h1>
-      <div class="progress"><div class="track"><div class="fill" style="width:${(checks.length / exs.length) * 100}%"></div></div><span>${checks.length} de ${exs.length}</span></div>
+      <div class="progress"><div class="track"><div class="fill" style="width:${(checks.length / blocks.length) * 100}%"></div></div><span>${checks.length} de ${blocks.length} bloques</span></div>
     </header>
-    ${notes.length ? `<div class="stack" style="margin-top:14px">${notes.map((n) => `<p class="note">${esc(n)}</p>`).join('')}</div>` : ''}
-    <div class="stack" style="margin-top:14px">${rows}</div>
+    ${notes.length ? `<div class="stack" style="margin-top:14px">${notes.map((t) => `<p class="note">${esc(t)}</p>`).join('')}</div>` : ''}
+    <div class="stack" style="margin-top:14px;gap:10px">${cards}</div>
     ${footer}`;
 }
 
-function toggleCheck(sid, exid) {
+function toggleCheck(sid, bid) {
   const arr = state.checks[sid] || (state.checks[sid] = []);
-  const i = arr.indexOf(exid);
-  if (i >= 0) arr.splice(i, 1); else arr.push(exid);
+  const i = arr.indexOf(bid);
+  if (i >= 0) arr.splice(i, 1); else arr.push(bid);
   save();
   render();
 }
@@ -237,7 +266,7 @@ function toggleCheck(sid, exid) {
 function completeDay(sid) {
   if (state.done.includes(sid)) return;
   state.done.push(sid);
-  state.log.push({ id: uid(), type: 'dia', at: nowStamp(), week: state.week, session: sid, done: (state.checks[sid] || []).slice(), total: exercisesOf(sessionById(sid)).length });
+  state.log.push({ id: uid(), type: 'dia', at: nowStamp(), week: state.week, session: sid, done: (state.checks[sid] || []).slice(), total: blocksOf(sessionById(sid)).length });
   if (state.done.length === SESSIONS.length) {
     state.log.push({ id: uid(), type: 'rutina', at: nowStamp(), week: state.week });
     save();
@@ -304,7 +333,7 @@ function entryRow(e) {
     const s = sessionById(e.session);
     badge = `<span class="badge ok">${I.check}</span>`;
     title = `${e.session} · ${esc(s ? s.title : '')}`;
-    detail = `Semana ${e.week} · ${e.done.length} de ${e.total} ejercicios · ${fmtDate(e.at)}`;
+    detail = `Semana ${e.week} · ${e.done.length} de ${e.total} bloques · ${fmtDate(e.at)}`;
   } else if (e.type === 'rutina') {
     badge = `<span class="badge ok">${I.check}</span>`;
     title = `Rutina semana ${e.week} completada`;
@@ -566,9 +595,9 @@ function weekStats(offset) {
       const s = sessionById(e.session);
       if (!s) return;
       const ph = phaseOf(e.week);
-      exercisesOf(s).forEach((ex) => {
-        if (!e.done.includes(ex.id)) return;
-        ex.muscles.forEach((m) => (series[m] += ex.sets[ph]));
+      blocksOf(s).forEach((b) => {
+        if (!e.done.includes(b.id)) return;
+        b.items.forEach((it) => it.muscles.forEach((m) => (series[m] += b.sets[ph])));
       });
     } else if (e.type === 'hyrox') {
       hyrox++;
@@ -635,12 +664,12 @@ function csvCell(v) {
 }
 
 function exportCsv() {
-  const head = ['fecha', 'hora', 'tipo', 'semana_plan', 'sesion', 'ejercicios_hechos', 'ejercicios_total', 'km', 'tiempo', 'ritmo_min_km', 'estaciones', 'texto'];
+  const head = ['fecha', 'hora', 'tipo', 'semana_plan', 'sesion', 'bloques_hechos', 'bloques_total', 'km', 'tiempo', 'ritmo_min_km', 'estaciones', 'texto'];
   const rows = state.log.slice().sort((a, b) => a.at.localeCompare(b.at)).map((e) => {
     const [d, t] = e.at.split('T');
     if (e.type === 'dia') {
       const s = sessionById(e.session);
-      const names = s ? exercisesOf(s).filter((x) => e.done.includes(x.id)).map((x) => x.name).join(' | ') : '';
+      const names = s ? blocksOf(s).filter((x) => e.done.includes(x.id)).map((x) => x.title).join(' | ') : '';
       return [d, t, 'Día de rutina', e.week, `${e.session} · ${s ? s.title : ''}`, names, e.total, '', '', '', '', ''];
     }
     if (e.type === 'rutina') return [d, t, 'Rutina completada', e.week, '', '', '', '', '', '', '', ''];
@@ -692,7 +721,7 @@ function viewAjustes() {
     <p class="eyebrow section-title">Exportar</p>
     <div class="card stack" style="gap:12px">
       <p style="font-weight:600;font-size:15px">Historial de entrenos</p>
-      <p class="sub">Días de rutina, ejercicios marcados, entrenos Hyrox y carreras, con fecha y hora.</p>
+      <p class="sub">Días de rutina, bloques marcados, entrenos Hyrox y carreras, con fecha y hora.</p>
       <button class="btn" data-action="export-csv">${I.download}Exportar .csv</button>
     </div>
 
@@ -711,6 +740,9 @@ function viewAjustes() {
       <button class="btn secondary small" data-action="set-week">Cambiar semana</button>
       <p class="muted">Al cambiar de semana se reinician los días marcados de la rutina actual. El historial no se toca.</p>
     </div>
+
+    <p class="eyebrow section-title">Mejoras para la app</p>
+    <a class="item" href="#/mejoras/ajustes"><span class="body"><span class="title" style="display:block">Anotar y enviar mejoras</span><span class="detail" style="display:block">${(() => { const p = state.notes.filter((x) => !x.sent).length; return p ? `${p} ${p === 1 ? 'nota pendiente' : 'notas pendientes'} de enviar` : 'Sin notas pendientes'; })()}</span></span>${I.next}</a>
 
     <p class="eyebrow section-title">Lector de fotos</p>
     <div class="card"><p class="sub" id="reader-status">Comprobando…</p></div>
@@ -736,6 +768,139 @@ function wipe() {
   state = freshState(); save(); toast('Datos borrados'); location.hash = '#/rutina';
 }
 
+/* ---------- Pantalla: Mejoras para la app ---------- */
+
+let draft = '';
+let recognition = null;
+
+function contextLabel(key) {
+  const s = sessionById(key);
+  if (s) return `Día ${s.id} · ${s.title}`;
+  const names = { rutina: 'Rutina', historial: 'Historial', control: 'Control', ajustes: 'General' };
+  return names[key] || 'General';
+}
+
+function viewMejoras(from) {
+  const ctx = from || 'ajustes';
+  const pending = state.notes.filter((x) => !x.sent).sort((a, b) => b.at.localeCompare(a.at));
+  const sent = state.notes.filter((x) => x.sent);
+  const back = sessionById(ctx) ? `#/dia/${ctx}` : '#/ajustes';
+  const canDictate = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+  const noteRow = (x) => `
+    <div class="card note-item">
+      <div class="body"><p>${esc(x.text)}</p><p class="muted" style="margin-top:4px">${esc(contextLabel(x.from))} · ${fmtDate(x.at)}</p></div>
+      <button class="icon-btn plain" data-action="delete-note" data-id="${x.id}" aria-label="Borrar nota">${I.trash}</button>
+    </div>`;
+  document.body.classList.add('has-footer');
+  return `
+    <header class="head">
+      <a class="back" href="${back}">${I.back}Volver</a>
+      <h1 style="font-size:28px">Mejoras para la app</h1>
+      <p class="sub">Anota lo que cambiarías mientras entrenas. Se guarda en el móvil hasta que lo envíes.</p>
+    </header>
+    <div class="stack" style="margin-top:18px;gap:10px">
+      <p class="eyebrow">Desde: ${esc(contextLabel(ctx))}</p>
+      <label class="field">NUEVA NOTA
+        <textarea class="input" rows="4" data-field="draft" placeholder="Por ejemplo: el bloque 2 se me queda corto">${esc(draft)}</textarea>
+      </label>
+      <div class="btn-row">
+        <button class="btn secondary small" data-action="dictate" ${canDictate ? '' : 'disabled'}>${I.mic}Dictar</button>
+        <button class="btn small" data-action="save-note" data-from="${esc(ctx)}">Guardar nota</button>
+      </div>
+      ${canDictate ? '' : '<p class="muted">Este navegador no permite dictar aquí. Usa el micrófono del teclado.</p>'}
+    </div>
+    <p class="eyebrow section-title">Pendientes de enviar · ${pending.length}</p>
+    <div class="stack">${pending.length ? pending.map(noteRow).join('') : '<p class="empty">No hay notas pendientes.</p>'}</div>
+    ${sent.length ? `<p class="eyebrow section-title">Ya enviadas · ${sent.length}</p><button class="btn ghost" data-action="clear-sent">Borrar las enviadas</button>` : ''}
+    <div class="footer"><div class="inner">
+      <button class="btn" data-action="send-notes" ${pending.length ? '' : 'disabled'}>${I.send}Enviar ${pending.length || ''} ${pending.length === 1 ? 'nota' : 'notas'} a Claude</button>
+      <p class="muted" style="text-align:center">Se envían como archivo de texto. Guárdalo en Google Drive.</p>
+    </div></div>`;
+}
+
+function saveNote(from) {
+  const text = draft.trim();
+  if (!text) { toast('Escribe o dicta la nota primero'); return; }
+  state.notes.push({ id: uid(), at: nowStamp(), from: from || 'ajustes', text, sent: false });
+  draft = '';
+  save();
+  toast('Nota guardada');
+  render();
+}
+
+function deleteNote(id) {
+  if (!confirm('¿Borrar esta nota?')) return;
+  state.notes = state.notes.filter((x) => x.id !== id);
+  save(); render();
+}
+
+function clearSent() {
+  state.notes = state.notes.filter((x) => !x.sent);
+  save(); render();
+}
+
+function dictate(btn) {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) return;
+  if (recognition) { recognition.stop(); return; }
+  recognition = new SR();
+  recognition.lang = 'es-ES';
+  recognition.interimResults = false;
+  recognition.continuous = false;
+  btn.classList.add('listening');
+  btn.lastChild.textContent = 'Escuchando…';
+  recognition.onresult = (ev) => {
+    const said = Array.from(ev.results).map((r) => r[0].transcript).join(' ').trim();
+    if (!said) return;
+    draft = (draft ? draft.trimEnd() + ' ' : '') + said;
+    const ta = $('textarea[data-field="draft"]');
+    if (ta) ta.value = draft;
+  };
+  recognition.onerror = (ev) => {
+    toast(ev.error === 'network' ? 'El dictado necesita conexión. Usa el micrófono del teclado.' : 'No se pudo dictar');
+  };
+  recognition.onend = () => {
+    recognition = null;
+    btn.classList.remove('listening');
+    btn.lastChild.textContent = 'Dictar';
+  };
+  try { recognition.start(); } catch (e) { recognition = null; }
+}
+
+async function sendNotes() {
+  const pending = state.notes.filter((x) => !x.sent).sort((a, b) => a.at.localeCompare(b.at));
+  if (!pending.length) return;
+  const n = nowLocal();
+  const lines = [`Mejoras para la app Rutina · enviado ${n.date} ${n.time} · versión ${APP_VERSION}`, ''];
+  pending.forEach((x, i) => {
+    lines.push(`${i + 1}. [${contextLabel(x.from)}] ${x.at.replace('T', ' ')}`);
+    lines.push(x.text);
+    lines.push('');
+  });
+  const text = lines.join('\n');
+  const name = `mejoras-rutina-${n.date}-${n.time.replace(':', '')}.txt`;
+  const file = new File([text], name, { type: 'text/plain' });
+  let ok = false;
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], title: 'Mejoras para la app Rutina' });
+      ok = true;
+    } catch (e) {
+      if (e && e.name === 'AbortError') return;
+    }
+  }
+  if (!ok) {
+    download(name, text, 'text/plain;charset=utf-8');
+    ok = confirm('Se ha descargado el archivo. ¿Marcar estas notas como enviadas?');
+  }
+  if (ok) {
+    pending.forEach((x) => (x.sent = true));
+    save();
+    toast('Notas enviadas');
+    render();
+  }
+}
+
 /* ---------- Router ---------- */
 
 const TABS = [
@@ -757,6 +922,7 @@ function render() {
     case 'carrera': html = viewCarrera(param || null); break;
     case 'control': html = viewControl(); tab = '#/control'; break;
     case 'ajustes': html = viewAjustes(); tab = '#/ajustes'; break;
+    case 'mejoras': html = viewMejoras(param || null); break;
     default: html = viewRutina(); tab = '#/rutina';
   }
   if (route !== 'hyrox') hx = null;
@@ -764,7 +930,8 @@ function render() {
   $('#app').innerHTML = html;
   document.body.classList.toggle('has-tabs', !!tab);
   $('#tabs').innerHTML = TABS.map((t) => `<a href="${t.hash}" ${t.hash === tab ? 'aria-current="page"' : ''}>${t.icon}${t.label}</a>`).join('');
-  const titles = { dia: 'Día de entreno', completada: 'Rutina completada', historial: 'Historial', hyrox: 'Entreno Hyrox', carrera: 'Carrera', control: 'Control', ajustes: 'Ajustes' };
+  if (route !== 'mejoras' && recognition) { recognition.stop(); }
+  const titles = { mejoras: 'Mejoras', dia: 'Día de entreno', completada: 'Rutina completada', historial: 'Historial', hyrox: 'Entreno Hyrox', carrera: 'Carrera', control: 'Control', ajustes: 'Ajustes' };
   document.title = (titles[route] || 'Rutina') + ' · Rutina';
 }
 
@@ -782,7 +949,7 @@ document.addEventListener('click', (ev) => {
   const el = ev.target.closest('[data-action]');
   if (!el || el.tagName === 'INPUT') return;
   const a = el.dataset.action;
-  if (a === 'toggle') toggleCheck(el.dataset.s, el.dataset.ex);
+  if (a === 'toggle') toggleCheck(el.dataset.s, el.dataset.b);
   else if (a === 'complete-day') completeDay(el.dataset.s);
   else if (a === 'undo-day') undoDay(el.dataset.s);
   else if (a === 'next-week') nextWeek();
@@ -794,6 +961,11 @@ document.addEventListener('click', (ev) => {
   else if (a === 'export-backup') exportBackup();
   else if (a === 'set-week') setWeek();
   else if (a === 'wipe') wipe();
+  else if (a === 'save-note') saveNote(el.dataset.from);
+  else if (a === 'delete-note') deleteNote(el.dataset.id);
+  else if (a === 'clear-sent') clearSent();
+  else if (a === 'dictate') dictate(el);
+  else if (a === 'send-notes') sendNotes();
 });
 
 document.addEventListener('change', (ev) => {
@@ -806,6 +978,7 @@ document.addEventListener('input', (ev) => {
   const el = ev.target;
   const f = el.dataset.field;
   if (!f) return;
+  if (f === 'draft') { draft = el.value; return; }
   if (hx && (f === 'text' || f === 'date' || f === 'time')) {
     hx[f] = el.value;
     if (f === 'text') $('#chips').innerHTML = chipsHtml(detectStations(hx.text));
@@ -826,6 +999,12 @@ if (navigator.storage && navigator.storage.persist) {
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
+    const hadController = !!navigator.serviceWorker.controller;
+    let reloaded = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      // Hay una versión nueva de la app: recarga una vez para usarla.
+      if (hadController && !reloaded) { reloaded = true; location.reload(); }
+    });
     navigator.serviceWorker.register('sw.js').catch(() => {});
   });
 }
