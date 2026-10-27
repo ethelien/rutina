@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = '1.1.0';
+const APP_VERSION = '1.2.0';
 const STORE_KEY = 'rutina.v1';
 
 /* ---------- Estado ---------- */
@@ -137,6 +137,7 @@ const I = {
   download: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>',
   upload: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20V9M7 14l5-5 5 5M5 4h14"/></svg>',
   run: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="14" cy="4.5" r="1.8"/><path d="M8 21l3-6 3 2v5M6 12l3-4 4 1 3 3 3 1"/></svg>',
+  close: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>',
   comment: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/><path d="M9 10h6"/></svg>',
   mic: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>',
   send: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12l16-8-6 16-3-7z"/></svg>',
@@ -346,8 +347,9 @@ function entryRow(e) {
   } else {
     badge = '<span class="badge hx">HX</span>';
     title = 'Entreno Hyrox';
-    const names = e.stations.map((id) => (STATIONS.find((x) => x.id === id) || {}).name).filter(Boolean);
-    detail = `${names.length ? esc(names.join(', ')) : 'Sin estaciones detectadas'} · ${fmtDate(e.at)}`;
+    const names = workoutNames(e.text, e.removed);
+    const shown = names.length > 4 ? `${names.slice(0, 4).join(', ')} y ${names.length - 4} más` : names.join(', ');
+    detail = `${names.length ? esc(shown) : 'Sin ejercicios reconocidos'} · ${fmtDate(e.at)}`;
     href = `#/hyrox/${e.id}`;
   }
   const body = `<span class="body"><span class="title" style="display:block">${title}</span><span class="detail" style="display:block">${detail}</span></span>`;
@@ -393,28 +395,19 @@ function deleteEntry(id) {
 
 let hx = null; // formulario en curso
 
-function normalize(t) {
-  return String(t).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-}
-function detectStations(text) {
-  const t = ' ' + normalize(text).replace(/[^a-z0-9]+/g, ' ') + ' ';
-  return STATIONS.filter((st) => st.words.some((w) => t.includes(' ' + normalize(w) + ' '))).map((st) => st.id);
-}
-
 function viewHyrox(id) {
   const editing = id ? state.log.find((e) => e.id === id && e.type === 'hyrox') : null;
   if (!hx || hx.id !== (id || null)) {
     const n = nowLocal();
     hx = editing
-      ? { id, text: editing.text, date: editing.at.split('T')[0], time: editing.at.split('T')[1], status: 'idle', read: false }
-      : { id: null, text: '', date: n.date, time: n.time, status: 'idle', read: false };
+      ? { id, text: editing.text, date: editing.at.split('T')[0], time: editing.at.split('T')[1], removed: (editing.removed || []).slice(), status: 'idle', read: false }
+      : { id: null, text: '', date: n.date, time: n.time, removed: [], status: 'idle', read: false };
   }
-  const st = detectStations(hx.text);
   let reader;
   if (hx.status === 'reading') {
     reader = `<div class="drop" aria-busy="true"><div class="spinner" aria-hidden="true"></div><span id="ocr-progress">${esc(hx.progress || 'Leyendo la foto…')}</span><span class="muted">Se hace en el móvil, sin internet</span></div>`;
   } else {
-    reader = `<label class="drop">${I.camera}${hx.read ? 'Leer otra foto' : 'Hacer foto o elegir imagen'}<span class="muted">La pizarra de la clase o tu entreno</span><input type="file" accept="image/*" data-action="photo"></label>`;
+    reader = `<label class="drop ${hx.text ? 'compact' : ''}">${I.camera}${hx.read || hx.text ? 'Leer otra foto' : 'Hacer foto o elegir imagen'}${hx.text ? '' : '<span class="muted">La pizarra de la clase o tu entreno</span>'}<input type="file" accept="image/*" data-action="photo"></label>`;
   }
   document.body.classList.add('has-footer');
   return `
@@ -422,25 +415,71 @@ function viewHyrox(id) {
       <a class="back" href="#/historial">${I.back}Historial</a>
       <h1 style="font-size:28px">${editing ? 'Editar entreno Hyrox' : 'Añadir entreno Hyrox'}</h1>
     </header>
-    <div style="margin-top:18px">${reader}</div>
-    ${hx.read ? `<div class="ok-note" style="margin-top:12px">${I.check} Foto leída en el móvil y eliminada</div>` : ''}
-    ${hx.error ? `<p class="note" style="margin-top:12px">${esc(hx.error)}</p>` : ''}
+    <div style="margin-top:16px">${reader}</div>
+    ${hx.read ? `<div class="ok-note" style="margin-top:10px">${I.check} Foto leída en el móvil y eliminada</div>` : ''}
+    ${hx.error ? `<p class="note" style="margin-top:10px">${esc(hx.error)}</p>` : ''}
+    <div id="analysis">${analysisHtml()}</div>
     <div class="stack" style="margin-top:18px;gap:14px">
       <label class="field">TEXTO LEÍDO (PUEDES CORREGIRLO)
-        <textarea class="input" rows="6" data-field="text" placeholder="Aquí aparece el texto de la foto. También puedes escribirlo.">${esc(hx.text)}</textarea>
+        <textarea class="input" rows="7" data-field="text" placeholder="Aquí aparece el texto de la foto. También puedes escribirlo.">${esc(hx.text)}</textarea>
       </label>
-      <div>
-        <p class="eyebrow" style="margin-bottom:8px">Detectado</p>
-        <div class="chips" id="chips">${chipsHtml(st)}</div>
-      </div>
       <label class="field">FECHA<input class="input" type="date" data-field="date" value="${esc(hx.date)}"></label>
       <label class="field">HORA<input class="input" type="time" data-field="time" value="${esc(hx.time)}"></label>
     </div>
     <div class="footer"><div class="inner"><button class="btn" data-action="save-hyrox" ${hx.status === 'reading' ? 'disabled' : ''}>Guardar en historial</button></div></div>`;
 }
 
-function chipsHtml(ids) {
-  return ids.length ? ids.map((id) => `<span class="chip">${esc(STATIONS.find((x) => x.id === id).name)}</span>`).join('') : '<span class="muted">Ninguna estación todavía</span>';
+function musclesText(ex) {
+  return ex.muscles.length ? ex.muscles.map((m) => MUSCLES[m].short).join(' · ') : 'Sin grupo muscular';
+}
+
+function analysisHtml() {
+  const a = analyzeWorkout(hx.text, hx.removed);
+  const all = a.blocks.flatMap((b) => b.items);
+  const active = all.filter((i) => !i.removed);
+  const off = all.length - active.length;
+  if (!all.length) {
+    const msg = hx.text.trim()
+      ? 'No se ha reconocido ningún ejercicio. Revisa el texto o escribe los ejercicios con su nombre (por ejemplo: back squat, wall balls, burpees).'
+      : 'Haz una foto de la pizarra o escribe el entreno y aquí verás los ejercicios y los músculos que trabaja.';
+    return `<p class="eyebrow section-title">Ejercicios detectados</p><p class="empty">${msg}</p>`;
+  }
+  const blocks = a.blocks.map((b) => {
+    const rows = b.items.filter((i) => !i.removed).map((i) => `
+        <div class="ex-row">
+          <div class="body"><p class="ex-name">${esc(i.ex.name)}</p><p class="muted">${esc(musclesText(i.ex))} · ${i.series} ${i.series === 1 ? 'serie' : 'series'}</p></div>
+          <button class="icon-btn plain" data-action="remove-ex" data-key="${esc(i.key)}" aria-label="Quitar ${esc(i.ex.name)}">${I.close}</button>
+        </div>`).join('');
+    if (!rows) return '';
+    return `
+      <section class="card ex-block">
+        <div class="ex-head"><p class="block-label">${esc(b.title)}</p><span class="pill">${esc(b.label)}</span></div>
+        ${rows}
+      </section>`;
+  }).join('');
+  const chips = Object.keys(a.totals).filter((k) => a.totals[k] > 0).sort((x, y) => a.totals[y] - a.totals[x])
+    .map((k) => `<span class="chip">${esc(MUSCLES[k].short)} ${a.totals[k]}</span>`).join('');
+  return `
+    <p class="eyebrow section-title">Ejercicios detectados · ${active.length}</p>
+    <div class="stack">${blocks}</div>
+    ${off ? `<button class="btn ghost small" data-action="restore-ex">Recuperar ${off} ${off === 1 ? 'quitado' : 'quitados'}</button>` : ''}
+    <p class="muted" style="margin-top:10px">¿Falta alguno? Escríbelo en el texto de abajo con sus repeticiones (por ejemplo: 20 wall balls) y se detecta solo.</p>
+    ${chips ? `<div class="card" style="margin-top:14px;display:flex;flex-direction:column;gap:10px"><p class="eyebrow">Esta clase suma al control</p><div class="chips">${chips}</div></div>` : ''}`;
+}
+
+function refreshAnalysis() {
+  const el = $('#analysis');
+  if (el) el.innerHTML = analysisHtml();
+}
+
+function removeExercise(key) {
+  if (!hx.removed.includes(key)) hx.removed.push(key);
+  refreshAnalysis();
+}
+
+function restoreExercises() {
+  hx.removed = [];
+  refreshAnalysis();
 }
 
 let tessLoaded = null;
@@ -513,10 +552,12 @@ async function readPhoto(file, input) {
 
 function saveHyrox() {
   if (!hx.text.trim()) { toast('Añade una foto o escribe el entreno'); return; }
-  const entry = { type: 'hyrox', at: stamp(hx.date, hx.time), text: hx.text.trim(), stations: detectStations(hx.text) };
+  const keys = analyzeWorkout(hx.text, []).blocks.flatMap((b) => b.items.map((i) => i.key));
+  const entry = { type: 'hyrox', at: stamp(hx.date, hx.time), text: hx.text.trim(), removed: hx.removed.filter((k) => keys.includes(k)) };
   if (hx.id) {
     const e = state.log.find((x) => x.id === hx.id);
     Object.assign(e, entry);
+    delete e.stations;
   } else {
     state.log.push(Object.assign({ id: uid() }, entry));
   }
@@ -601,10 +642,8 @@ function weekStats(offset) {
       });
     } else if (e.type === 'hyrox') {
       hyrox++;
-      e.stations.forEach((id) => {
-        const st = STATIONS.find((x) => x.id === id);
-        if (st) st.muscles.forEach((m) => (series[m] += SETS_PER_STATION));
-      });
+      const a = analyzeWorkout(e.text, e.removed);
+      Object.keys(a.totals).forEach((m) => (series[m] += a.totals[m]));
     } else if (e.type === 'carrera') {
       runs++; km += e.km; sec += e.sec;
     }
@@ -652,7 +691,7 @@ function viewControl() {
     </div>
     <p class="eyebrow section-title">A vigilar para Hyrox</p>
     <div class="stack">${runCard}${alerts}</div>
-    <p class="muted" style="margin-top:14px">Las series de Hyrox se estiman en ${SETS_PER_STATION} por estación detectada. Las referencias semanales son orientativas.</p>
+    <p class="muted" style="margin-top:14px">Las clases suman las series que se estiman de la pizarra: las rondas indicadas, una serie cada ${MINUTES_PER_SERIES} minutos en AMRAP y EMOM, o ${DEFAULT_SERIES} si no se indica. Las referencias semanales son orientativas.</p>
     <p class="sr-only">Tiempo aproximado: ${hours.toFixed(1)} horas</p>`;
 }
 
@@ -664,7 +703,7 @@ function csvCell(v) {
 }
 
 function exportCsv() {
-  const head = ['fecha', 'hora', 'tipo', 'semana_plan', 'sesion', 'bloques_hechos', 'bloques_total', 'km', 'tiempo', 'ritmo_min_km', 'estaciones', 'texto'];
+  const head = ['fecha', 'hora', 'tipo', 'semana_plan', 'sesion', 'bloques_hechos', 'bloques_total', 'km', 'tiempo', 'ritmo_min_km', 'ejercicios', 'texto'];
   const rows = state.log.slice().sort((a, b) => a.at.localeCompare(b.at)).map((e) => {
     const [d, t] = e.at.split('T');
     if (e.type === 'dia') {
@@ -674,7 +713,8 @@ function exportCsv() {
     }
     if (e.type === 'rutina') return [d, t, 'Rutina completada', e.week, '', '', '', '', '', '', '', ''];
     if (e.type === 'carrera') return [d, t, 'Carrera', '', '', '', '', fmtKm(e.km), fmtDuration(e.sec), fmtPace(e.sec, e.km), '', ''];
-    const names = e.stations.map((id) => (STATIONS.find((x) => x.id === id) || {}).name).filter(Boolean).join(' | ');
+    const names = analyzeWorkout(e.text, e.removed).blocks
+      .flatMap((b) => b.items.filter((i) => !i.removed).map((i) => `${i.ex.name} (${i.series})`)).join(' | ');
     return [d, t, 'Hyrox', '', '', '', '', '', '', '', names, e.text];
   });
   const csv = '﻿' + [head, ...rows].map((r) => r.map(csvCell).join(';')).join('\r\n');
@@ -966,6 +1006,8 @@ document.addEventListener('click', (ev) => {
   else if (a === 'clear-sent') clearSent();
   else if (a === 'dictate') dictate(el);
   else if (a === 'send-notes') sendNotes();
+  else if (a === 'remove-ex') removeExercise(el.dataset.key);
+  else if (a === 'restore-ex') restoreExercises();
 });
 
 document.addEventListener('change', (ev) => {
@@ -981,7 +1023,10 @@ document.addEventListener('input', (ev) => {
   if (f === 'draft') { draft = el.value; return; }
   if (hx && (f === 'text' || f === 'date' || f === 'time')) {
     hx[f] = el.value;
-    if (f === 'text') $('#chips').innerHTML = chipsHtml(detectStations(hx.text));
+    if (f === 'text') {
+      clearTimeout(refreshAnalysis._t);
+      refreshAnalysis._t = setTimeout(refreshAnalysis, 250);
+    }
   } else if (run && (f === 'km' || f === 'time' || f === 'date' || f === 'hour')) {
     run[f] = el.value;
     const p = $('#pace'); if (p) p.textContent = paceText();

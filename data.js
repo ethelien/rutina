@@ -5,14 +5,14 @@
 const YT = (q) => 'https://www.youtube.com/results?search_query=' + encodeURIComponent(q);
 
 const MUSCLES = {
-  gemelo:     { name: 'Gemelo y tobillo', target: 15, tip: 'Añade elevaciones de gemelo a una pierna o sóleo sentado.' },
-  cuadriceps: { name: 'Cuádriceps',       target: 12, tip: 'Sentadilla búlgara o zancadas con mancuernas.' },
-  gluteo:     { name: 'Glúteo',           target: 12, tip: 'Hip thrust a una pierna o zancadas.' },
-  isquios:    { name: 'Isquios',          target: 8,  tip: 'Peso muerto rumano con mancuernas en el día de pesas.' },
-  agarre:     { name: 'Agarre y antebrazo', target: 12, tip: 'Sujeción pesada con mancuernas y curl martillo.' },
-  core:       { name: 'Core',             target: 8,  tip: 'Planchas y sujeción a una mano (suitcase carry).' },
-  espalda:    { name: 'Espalda y tirón',  target: 10, tip: 'El sled pull y el remo la exigen: remo con mancuerna en el día de pesas.' },
-  hombro:     { name: 'Hombro y empuje',  target: 8,  tip: 'Wall balls y sled push: press con mancuernas y flexiones.' },
+  gemelo:     { short: 'Gemelo', name: 'Gemelo y tobillo', target: 15, tip: 'Añade elevaciones de gemelo a una pierna o sóleo sentado.' },
+  cuadriceps: { short: 'Cuádriceps', name: 'Cuádriceps',       target: 12, tip: 'Sentadilla búlgara o zancadas con mancuernas.' },
+  gluteo:     { short: 'Glúteo', name: 'Glúteo',           target: 12, tip: 'Hip thrust a una pierna o zancadas.' },
+  isquios:    { short: 'Isquios', name: 'Isquios',          target: 8,  tip: 'Peso muerto rumano con mancuernas en el día de pesas.' },
+  agarre:     { short: 'Agarre', name: 'Agarre y antebrazo', target: 12, tip: 'Sujeción pesada con mancuernas y curl martillo.' },
+  core:       { short: 'Core', name: 'Core',             target: 8,  tip: 'Planchas y sujeción a una mano (suitcase carry).' },
+  espalda:    { short: 'Espalda', name: 'Espalda y tirón',  target: 10, tip: 'El sled pull y el remo la exigen: remo con mancuerna en el día de pesas.' },
+  hombro:     { short: 'Hombro', name: 'Hombro y empuje',  target: 8,  tip: 'Wall balls y sled push: press con mancuernas y flexiones.' },
 };
 
 const WARMUP = {
@@ -140,21 +140,6 @@ const SESSIONS = [
     ],
   },
 ];
-
-// Estaciones de Hyrox: palabras que se buscan en el texto leído de la foto
-// y grupos musculares que suman (3 series estimadas por estación).
-const STATIONS = [
-  { id: 'carrera', name: 'Carrera', words: ['run', 'running', 'correr', 'carrera', 'km run'], muscles: [] },
-  { id: 'skierg', name: 'SkiErg', words: ['ski', 'skierg', 'ski erg'], muscles: ['espalda', 'hombro', 'core'] },
-  { id: 'sledpush', name: 'Sled push', words: ['sled push', 'push sled', 'empuje', 'push'], muscles: ['cuadriceps', 'gluteo', 'gemelo'] },
-  { id: 'sledpull', name: 'Sled pull', words: ['sled pull', 'pull sled', 'arrastre', 'pull'], muscles: ['espalda', 'agarre', 'isquios'] },
-  { id: 'burpee', name: 'Burpee broad jump', words: ['burpee', 'burpees', 'bbj', 'broad jump'], muscles: ['cuadriceps', 'hombro', 'core'] },
-  { id: 'remo', name: 'Remo', words: ['row', 'rowing', 'rower', 'remo'], muscles: ['espalda', 'isquios'] },
-  { id: 'farmers', name: 'Farmers carry', words: ['farmer', 'farmers', 'carry', 'granjero'], muscles: ['agarre', 'core'] },
-  { id: 'lunges', name: 'Sandbag lunges', words: ['lunge', 'lunges', 'sandbag', 'zancada', 'zancadas'], muscles: ['cuadriceps', 'gluteo'] },
-  { id: 'wallballs', name: 'Wall balls', words: ['wall ball', 'wallball', 'wall balls', 'wallballs'], muscles: ['cuadriceps', 'hombro'] },
-];
-const SETS_PER_STATION = 3;
 
 const PLAN_WEEKS = 12;
 const DELOAD_WEEKS = [4, 8, 12];

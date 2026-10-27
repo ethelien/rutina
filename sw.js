@@ -1,12 +1,14 @@
 // Service worker: guarda los archivos de la app para que funcione sin conexión.
 // Nunca guarda fotos: solo los archivos de esta lista y los del lector de texto.
-const CACHE = 'rutina-v1.1.0';
+const CACHE = 'rutina-v1.2.0';
 
 const APP_FILES = [
   './',
   'index.html',
   'styles.css',
   'data.js',
+  'ejercicios.js',
+  'pizarra.js',
   'app.js',
   'manifest.webmanifest',
   'icons/icon-192.png',
