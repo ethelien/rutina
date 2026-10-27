@@ -31,6 +31,11 @@ function findExercises(line) {
   return found;
 }
 
+// El primer músculo es el principal (1 serie); el resto son secundarios (0,5).
+function addSeries(totals, muscles, series) {
+  muscles.forEach((m, i) => { if (m in totals) totals[m] += series * (i === 0 ? 1 : 0.5); });
+}
+
 function plainLower(t) {
   return String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 }
@@ -123,7 +128,7 @@ function analyzeWorkout(text, removed) {
       const key = `${base}:${i.ex.id}`;
       const s = light ? 1 : i.sets || series;
       const off = gone.includes(key);
-      if (!off) i.ex.muscles.forEach((m) => (totals[m] += s));
+      if (!off) addSeries(totals, i.ex.muscles, s);
       return { key, ex: i.ex, series: s, removed: off };
     });
     return { title, label, items };

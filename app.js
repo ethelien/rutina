@@ -1,12 +1,12 @@
 'use strict';
 
-const APP_VERSION = '1.2.0';
+const APP_VERSION = '1.3.0';
 const STORE_KEY = 'rutina.v1';
 
 /* ---------- Estado ---------- */
 
 function freshState() {
-  return { version: 2, week: 1, done: [], checks: {}, log: [], notes: [] };
+  return { version: 2, week: 1, done: [], checks: {}, log: [], notes: [], ranges: {} };
 }
 
 function migrate(s) {
@@ -16,6 +16,7 @@ function migrate(s) {
     s.version = 2;
   }
   if (!Array.isArray(s.notes)) s.notes = [];
+  if (!s.ranges || typeof s.ranges !== 'object') s.ranges = {};
   return s;
 }
 
@@ -458,7 +459,7 @@ function analysisHtml() {
       </section>`;
   }).join('');
   const chips = Object.keys(a.totals).filter((k) => a.totals[k] > 0).sort((x, y) => a.totals[y] - a.totals[x])
-    .map((k) => `<span class="chip">${esc(MUSCLES[k].short)} ${a.totals[k]}</span>`).join('');
+    .map((k) => `<span class="chip">${esc(MUSCLES[k].short)} ${fmtNum(a.totals[k])}</span>`).join('');
   return `
     <p class="eyebrow section-title">Ejercicios detectados · ${active.length}</p>
     <div class="stack">${blocks}</div>
@@ -638,7 +639,7 @@ function weekStats(offset) {
       const ph = phaseOf(e.week);
       blocksOf(s).forEach((b) => {
         if (!e.done.includes(b.id)) return;
-        b.items.forEach((it) => it.muscles.forEach((m) => (series[m] += b.sets[ph])));
+        b.items.forEach((it) => addSeries(series, it.muscles, b.sets[ph]));
       });
     } else if (e.type === 'hyrox') {
       hyrox++;
@@ -651,26 +652,46 @@ function weekStats(offset) {
   return { start, end, dias, hyrox, km, sec, runs, series, empty: inWeek.length === 0 };
 }
 
+function rangeOf(k) {
+  const r = (state.ranges || {})[k];
+  return r && Number.isFinite(r.min) && Number.isFinite(r.max) ? r : { min: MUSCLES[k].min, max: MUSCLES[k].max };
+}
+
+const fmtNum = (n) => (Math.round(n * 10) / 10).toString().replace('.', ',');
+
 function viewControl() {
   const w = weekStats(weekOffset);
   const endShown = new Date(w.end); endShown.setDate(endShown.getDate() - 1);
   const label = weekOffset === 0 ? 'Esta semana' : weekOffset === -1 ? 'Semana pasada' : `${w.start.getDate()} ${MONTHS[w.start.getMonth()]} – ${endShown.getDate()} ${MONTHS[endShown.getMonth()]}`;
 
   const keys = Object.keys(MUSCLES);
-  const max = Math.max(...keys.map((k) => Math.max(w.series[k], MUSCLES[k].target * 1.5)));
-  const bars = keys.map((k) => {
-    const v = w.series[k], t = MUSCLES[k].target;
-    const ok = v >= t;
-    return `<span>${esc(MUSCLES[k].name)}</span><div class="bar" role="img" aria-label="${esc(MUSCLES[k].name)}: ${v} de ${t} series"><div class="fill ${ok ? 'ok' : ''}" style="width:${(v / max) * 100}%"></div><div class="target" style="left:${(t / max) * 100}%"></div></div><span class="num">${v}<span class="muted">/${t}</span></span>`;
+  const scale = Math.max(40, ...keys.map((k) => Math.max(w.series[k], rangeOf(k).max) * 1.15));
+  const stateOf = (k) => { const v = w.series[k], r = rangeOf(k); return v < r.min ? 'low' : v > r.max ? 'high' : 'ok'; };
+  const row = (k) => {
+    const v = w.series[k], r = rangeOf(k), st = stateOf(k);
+    const word = st === 'low' ? 'por debajo' : st === 'high' ? 'volumen alto' : 'en rango';
+    return `
+      <div class="mrow">
+        <div class="mrow-top"><span>${esc(MUSCLES[k].name)}</span><span><strong>${fmtNum(v)}</strong> <span class="muted">/ ${r.min}–${r.max}</span></span></div>
+        <div class="rbar" role="img" aria-label="${esc(MUSCLES[k].name)}: ${fmtNum(v)} series, rango ${r.min} a ${r.max}, ${word}">
+          <div class="rfill ${st}" style="width:${Math.min(100, (v / scale) * 100)}%"></div>
+          <div class="rband" style="left:${(r.min / scale) * 100}%;width:${((r.max - r.min) / scale) * 100}%"></div>
+        </div>
+      </div>`;
+  };
+  const groups = TIERS.map(([tier, title]) => {
+    const ks = keys.filter((k) => MUSCLES[k].tier === tier);
+    return ks.length ? `<p class="tier ${tier === 'prioridad' ? 'first' : ''}">${esc(title)}</p>${ks.map(row).join('')}` : '';
   }).join('');
 
-  const low = keys.filter((k) => w.series[k] < MUSCLES[k].target).sort((a, b) => w.series[a] / MUSCLES[a].target - w.series[b] / MUSCLES[b].target);
-  const alerts = w.empty ? '' : low.slice(0, 4).map((k) => `<div class="alert"><p class="title">${esc(MUSCLES[k].name)} · ${w.series[k]} de ${MUSCLES[k].target} series</p><p>${esc(MUSCLES[k].tip)}</p></div>`).join('');
+  const low = keys.filter((k) => stateOf(k) === 'low').sort((a, b) => w.series[a] / rangeOf(a).min - w.series[b] / rangeOf(b).min);
+  const high = keys.filter((k) => stateOf(k) === 'high');
+  const lowCards = w.empty ? '' : low.slice(0, 4).map((k) => `<div class="alert"><p class="title">${esc(MUSCLES[k].name)} · ${fmtNum(w.series[k])} de ${rangeOf(k).min} series mínimas</p><p>${esc(MUSCLES[k].tip)}</p></div>`).join('');
+  const names = high.map((k) => MUSCLES[k].short);
+  const highCard = w.empty || !high.length ? '' : `<div class="alert info"><p class="title">Volumen alto · ${esc(names.length > 1 ? names.slice(0, -1).join(', ') + ' y ' + names[names.length - 1] : names[0])}</p><p>No es malo, pero si llegas cargado a la clase, haz solo los bloques 1 y 2 de la rutina.</p></div>`;
 
   const runOk = w.km >= RUN_TARGET[0];
   const runCard = `<div class="${runOk ? 'card' : 'alert'}"><p class="title" style="font-weight:600;font-size:15px">Carrera · ${w.runs} ${w.runs === 1 ? 'salida' : 'salidas'} · ${fmtKm(w.km)} km</p><p class="sub" style="margin-top:4px">${w.runs ? `Ritmo medio ${fmtPace(w.sec, w.km)} /km · ` : ''}objetivo semanal ${RUN_TARGET[0]}-${RUN_TARGET[1]} km</p></div>`;
-
-  const hours = (w.sec + w.dias * 30 * 60) / 3600;
 
   return `
     <header class="head"><h1>Control</h1></header>
@@ -681,18 +702,18 @@ function viewControl() {
     </div>
     <div class="tiles">
       <div class="tile"><strong>${w.dias}/5</strong><span>Días de rutina</span></div>
-      <div class="tile"><strong>${w.hyrox}</strong><span>Entrenos Hyrox</span></div>
+      <div class="tile"><strong>${w.hyrox}</strong><span>Clases Hyrox</span></div>
       <div class="tile"><strong>${fmtKm(w.km)}</strong><span>Km corriendo</span></div>
     </div>
     <div class="card" style="margin-top:18px">
-      <p style="font-weight:600;font-size:15px;margin-bottom:12px">Series por grupo muscular</p>
-      ${w.empty ? '<p class="sub">No hay entrenos guardados en esta semana.</p>' : `<div class="bars">${bars}</div>
-      <div class="legend"><span><i style="background:var(--green-bar)"></i>En objetivo</span><span><i style="background:var(--amber)"></i>Por debajo</span><span><i style="background:var(--text-2);width:2px;border-radius:0"></i>Referencia</span></div>`}
+      <p style="font-weight:600;font-size:15px">Series por grupo muscular</p>
+      <p class="muted" style="margin-top:4px">Músculo principal = 1 serie · secundario = 0,5</p>
+      ${w.empty ? '<p class="sub" style="margin-top:12px">No hay entrenos guardados en esta semana.</p>' : `<div class="mlist">${groups}</div>
+      <div class="legend"><span><i style="background:var(--amber)"></i>Por debajo</span><span><i style="background:var(--green-bar)"></i>En rango</span><span><i style="background:var(--blue)"></i>Volumen alto</span><span><i class="band-key"></i>Rango</span></div>`}
     </div>
     <p class="eyebrow section-title">A vigilar para Hyrox</p>
-    <div class="stack">${runCard}${alerts}</div>
-    <p class="muted" style="margin-top:14px">Las clases suman las series que se estiman de la pizarra: las rondas indicadas, una serie cada ${MINUTES_PER_SERIES} minutos en AMRAP y EMOM, o ${DEFAULT_SERIES} si no se indica. Las referencias semanales son orientativas.</p>
-    <p class="sr-only">Tiempo aproximado: ${hours.toFixed(1)} horas</p>`;
+    <div class="stack">${runCard}${lowCards}${highCard}</div>
+    <p class="muted" style="margin-top:14px">Rangos orientativos de series semanales; puedes cambiarlos en <a href="#/ajustes">Ajustes</a>. Las clases suman las series estimadas de la pizarra: las rondas indicadas, una serie cada ${MINUTES_PER_SERIES} minutos en AMRAP y EMOM, o ${DEFAULT_SERIES} si no se indica.</p>`;
 }
 
 /* ---------- Pantalla: Ajustes ---------- */
@@ -761,7 +782,7 @@ function viewAjustes() {
     <p class="eyebrow section-title">Exportar</p>
     <div class="card stack" style="gap:12px">
       <p style="font-weight:600;font-size:15px">Historial de entrenos</p>
-      <p class="sub">Días de rutina, bloques marcados, entrenos Hyrox y carreras, con fecha y hora.</p>
+      <p class="sub">Días de rutina, bloques marcados, clases Hyrox y carreras, con fecha y hora.</p>
       <button class="btn" data-action="export-csv">${I.download}Exportar .csv</button>
     </div>
 
@@ -779,6 +800,19 @@ function viewAjustes() {
       <label class="field">ESTÁS EN<select class="input" id="week-select">${opts}</select></label>
       <button class="btn secondary small" data-action="set-week">Cambiar semana</button>
       <p class="muted">Al cambiar de semana se reinician los días marcados de la rutina actual. El historial no se toca.</p>
+    </div>
+
+    <p class="eyebrow section-title">Rangos del control</p>
+    <div class="card stack" style="gap:10px">
+      <p class="sub">Series semanales por grupo (mínimo – máximo).</p>
+      ${Object.keys(MUSCLES).map((k) => { const r = rangeOf(k); return `
+        <div class="range-row">
+          <span>${esc(MUSCLES[k].name)}</span>
+          <input class="input small-num" type="number" inputmode="numeric" min="0" max="99" value="${r.min}" data-range="${k}" data-end="min" aria-label="Mínimo de ${esc(MUSCLES[k].name)}">
+          <span class="muted">–</span>
+          <input class="input small-num" type="number" inputmode="numeric" min="0" max="99" value="${r.max}" data-range="${k}" data-end="max" aria-label="Máximo de ${esc(MUSCLES[k].name)}">
+        </div>`; }).join('')}
+      <button class="btn ghost small" data-action="reset-ranges">Restablecer valores recomendados</button>
     </div>
 
     <p class="eyebrow section-title">Mejoras para la app</p>
@@ -1007,6 +1041,7 @@ document.addEventListener('click', (ev) => {
   else if (a === 'dictate') dictate(el);
   else if (a === 'send-notes') sendNotes();
   else if (a === 'remove-ex') removeExercise(el.dataset.key);
+  else if (a === 'reset-ranges') { state.ranges = {}; save(); toast('Rangos restablecidos'); render(); }
   else if (a === 'restore-ex') restoreExercises();
 });
 
@@ -1014,6 +1049,17 @@ document.addEventListener('change', (ev) => {
   const el = ev.target;
   if (el.dataset.action === 'photo' && el.files && el.files[0]) readPhoto(el.files[0], el);
   if (el.dataset.action === 'import-backup' && el.files && el.files[0]) importBackup(el.files[0], el);
+  if (el.dataset.range) {
+    const k = el.dataset.range;
+    const r = Object.assign({}, rangeOf(k));
+    const v = Math.max(0, Math.min(99, Math.round(Number(el.value))));
+    if (!Number.isFinite(v)) return;
+    r[el.dataset.end] = v;
+    if (r.min > r.max) { toast('El mínimo no puede ser mayor que el máximo'); el.value = rangeOf(k)[el.dataset.end]; return; }
+    state.ranges[k] = r;
+    save();
+    toast('Rango guardado');
+  }
 });
 
 document.addEventListener('input', (ev) => {

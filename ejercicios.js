@@ -1,6 +1,6 @@
 // Diccionario de ejercicios que la app reconoce en el texto de la pizarra.
 // Para añadir uno: copia una línea, pon un id nuevo, el nombre, los grupos musculares
-// (claves de MUSCLES en data.js) y las palabras con las que suele aparecer escrito.
+// (claves de MUSCLES en data.js; el primero es el principal y cuenta 1 serie, el resto 0,5) y las palabras con las que suele aparecer escrito.
 // Las palabras se comparan sin mayúsculas ni tildes; el plural con "s" se reconoce solo.
 // Si dos palabras coinciden en el mismo texto, gana la más larga ("pike push up" antes que "push up").
 
@@ -10,7 +10,7 @@ const EXERCISES = [
   { id: 'skierg', name: 'SkiErg', muscles: ['espalda', 'hombro', 'core'], words: ['ski', 'skierg', 'ski erg'] },
   { id: 'sledpush', name: 'Sled push', muscles: ['cuadriceps', 'gluteo', 'gemelo'], words: ['sled push', 'push sled', 'empuje de trineo', 'trineo empuje'] },
   { id: 'sledpull', name: 'Sled pull', muscles: ['espalda', 'agarre', 'isquios'], words: ['sled pull', 'pull sled', 'sled drag', 'arrastre de trineo'] },
-  { id: 'bbj', name: 'Burpee broad jump', muscles: ['cuadriceps', 'hombro', 'core'], words: ['burpee broad jump', 'bbj', 'burpee broad'] },
+  { id: 'bbj', name: 'Burpee broad jump', muscles: ['cuadriceps', 'gluteo', 'pecho', 'core'], words: ['burpee broad jump', 'bbj', 'burpee broad'] },
   { id: 'remo', name: 'Remo (ergómetro)', muscles: ['espalda', 'isquios'], words: ['row', 'rowing', 'rower', 'remo', 'cal row', 'remoergometro'] },
   { id: 'farmers', name: 'Farmers carry', muscles: ['agarre', 'core'], words: ['farmer', 'farmers', 'farmer carry', 'farmers carry', 'farmer walk', 'farmers walk', 'granjero', 'paseo del granjero'] },
   { id: 'lunges', name: 'Zancadas', muscles: ['cuadriceps', 'gluteo'], words: ['lunge', 'sandbag lunge', 'walking lunge', 'reverse lunge', 'zancada', 'front rack lunge', 'overhead lunge'] },
@@ -45,19 +45,19 @@ const EXERCISES = [
   { id: 'jerk', name: 'Jerk', muscles: ['hombro', 'cuadriceps'], words: ['jerk', 'push jerk', 'split jerk'] },
   { id: 'thruster', name: 'Thruster', muscles: ['cuadriceps', 'hombro'], words: ['thruster'] },
   { id: 'pushpress', name: 'Push press', muscles: ['hombro', 'cuadriceps'], words: ['push press'] },
-  { id: 'shoulderpress', name: 'Shoulder press', muscles: ['hombro'], words: ['shoulder press', 'strict press', 'press militar', 'overhead press', 'ohp', 'press de hombro', 'arnold press', 'military press'] },
-  { id: 'bench', name: 'Press banca', muscles: ['hombro'], words: ['bench press', 'bench', 'press banca', 'press de banca', 'floor press'] },
+  { id: 'shoulderpress', name: 'Shoulder press', muscles: ['hombro', 'pecho'], words: ['shoulder press', 'strict press', 'press militar', 'overhead press', 'ohp', 'press de hombro', 'arnold press', 'military press'] },
+  { id: 'bench', name: 'Press banca', muscles: ['pecho', 'hombro'], words: ['bench press', 'bench', 'press banca', 'press de banca', 'floor press'] },
   { id: 'devilpress', name: 'Devil press', muscles: ['hombro', 'isquios', 'core'], words: ['devil press', 'devils press', 'man maker'] },
   { id: 'sandbag', name: 'Sandbag al hombro', muscles: ['isquios', 'gluteo', 'espalda', 'agarre'], words: ['sandbag to shoulder', 'sandbag over shoulder', 'sandbag clean', 'atlas stone', 'med ball clean'] },
   { id: 'slam', name: 'Ball slam', muscles: ['core', 'hombro'], words: ['ball slam', 'slam ball', 'slam'] },
 
   // Empuje con peso corporal
-  { id: 'pushup', name: 'Flexiones', muscles: ['hombro', 'core'], words: ['push up', 'pushup', 'hand release push up', 'hrpu', 'flexion', 'flexiones'] },
+  { id: 'pushup', name: 'Flexiones', muscles: ['pecho', 'hombro', 'core'], words: ['push up', 'pushup', 'hand release push up', 'hrpu', 'flexion', 'flexiones'] },
   { id: 'pikepushup', name: 'Pike push ups', muscles: ['hombro', 'core'], words: ['pike push up', 'pike pushup', 'flexion en pica'] },
-  { id: 'hspu', name: 'Handstand push up', muscles: ['hombro'], words: ['handstand push up', 'hspu', 'strict hspu', 'flexion en pino'] },
+  { id: 'hspu', name: 'Handstand push up', muscles: ['hombro', 'pecho'], words: ['handstand push up', 'hspu', 'strict hspu', 'flexion en pino'] },
   { id: 'hswalk', name: 'Handstand walk', muscles: ['hombro', 'core'], words: ['handstand walk', 'hs walk', 'pino', 'wall walk', 'handstand hold'] },
-  { id: 'dip', name: 'Fondos', muscles: ['hombro'], words: ['dip', 'ring dip', 'bar dip', 'fondos'] },
-  { id: 'burpee', name: 'Burpees', muscles: ['cuadriceps', 'hombro', 'core'], words: ['burpee', 'bar facing burpee', 'burpee over bar', 'burpee box jump'] },
+  { id: 'dip', name: 'Fondos', muscles: ['pecho', 'hombro'], words: ['dip', 'ring dip', 'bar dip', 'fondos'] },
+  { id: 'burpee', name: 'Burpees', muscles: ['cuadriceps', 'pecho', 'core'], words: ['burpee', 'bar facing burpee', 'burpee over bar', 'burpee box jump'] },
   { id: 'bearcrawl', name: 'Bear crawl', muscles: ['hombro', 'core'], words: ['bear crawl', 'gateo'] },
 
   // Tirón
@@ -70,7 +70,7 @@ const EXERCISES = [
   { id: 'ropeclimb', name: 'Trepa de cuerda', muscles: ['espalda', 'agarre'], words: ['rope climb', 'trepa', 'legless rope climb'] },
   { id: 'pulldown', name: 'Jalón', muscles: ['espalda'], words: ['lat pulldown', 'pulldown', 'jalon'] },
   { id: 'facepull', name: 'Face pull', muscles: ['hombro', 'espalda'], words: ['face pull'] },
-  { id: 'curl', name: 'Curl de bíceps', muscles: ['agarre'], words: ['curl', 'bicep curl', 'biceps curl', 'hammer curl', 'curl martillo', 'curl de biceps'] },
+  { id: 'curl', name: 'Curl de bíceps', muscles: ['antebrazo'], words: ['curl', 'bicep curl', 'biceps curl', 'hammer curl', 'curl martillo', 'curl de biceps'] },
 
   // Core
   { id: 'ttb', name: 'Toes to bar / rodillas al pecho', muscles: ['core', 'agarre'], words: ['toes to bar', 'ttb', 't2b', 'knees to chest', 'k2c', 'knees to elbow', 'k2e', 'rodillas al pecho', 'hanging knee raise', 'knee raise'] },
@@ -85,7 +85,7 @@ const EXERCISES = [
   { id: 'deadbug', name: 'Dead bug', muscles: ['core'], words: ['dead bug', 'bird dog'] },
 
   // Agarre y transportes
-  { id: 'deadhang', name: 'Colgado en barra', muscles: ['agarre'], words: ['dead hang', 'colgado', 'bar hang', 'hang hold'] },
+  { id: 'deadhang', name: 'Colgado en barra', muscles: ['agarre', 'espalda'], words: ['dead hang', 'colgado', 'bar hang', 'hang hold'] },
   { id: 'carry', name: 'Transporte con peso', muscles: ['agarre', 'core'], words: ['carry', 'suitcase carry', 'front rack carry', 'overhead carry', 'kb carry', 'sandbag carry', 'yoke'] },
   { id: 'battlerope', name: 'Battle rope', muscles: ['hombro', 'core'], words: ['battle rope', 'cuerdas de batalla'] },
 

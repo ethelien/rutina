@@ -4,16 +4,21 @@
 
 const YT = (q) => 'https://www.youtube.com/results?search_query=' + encodeURIComponent(q);
 
+// Grupos musculares del Control. min/max = rango orientativo de series semanales
+// (músculo principal cuenta 1 serie, secundario 0,5). Se pueden cambiar en Ajustes.
 const MUSCLES = {
-  gemelo:     { short: 'Gemelo', name: 'Gemelo y tobillo', target: 15, tip: 'Añade elevaciones de gemelo a una pierna o sóleo sentado.' },
-  cuadriceps: { short: 'Cuádriceps', name: 'Cuádriceps',       target: 12, tip: 'Sentadilla búlgara o zancadas con mancuernas.' },
-  gluteo:     { short: 'Glúteo', name: 'Glúteo',           target: 12, tip: 'Hip thrust a una pierna o zancadas.' },
-  isquios:    { short: 'Isquios', name: 'Isquios',          target: 8,  tip: 'Peso muerto rumano con mancuernas en el día de pesas.' },
-  agarre:     { short: 'Agarre', name: 'Agarre y antebrazo', target: 12, tip: 'Sujeción pesada con mancuernas y curl martillo.' },
-  core:       { short: 'Core', name: 'Core',             target: 8,  tip: 'Planchas y sujeción a una mano (suitcase carry).' },
-  espalda:    { short: 'Espalda', name: 'Espalda y tirón',  target: 10, tip: 'El sled pull y el remo la exigen: remo con mancuerna en el día de pesas.' },
-  hombro:     { short: 'Hombro', name: 'Hombro y empuje',  target: 8,  tip: 'Wall balls y sled push: press con mancuernas y flexiones.' },
+  gemelo:     { short: 'Gemelo',     name: 'Gemelo y tobillo',   tier: 'prioridad', min: 15, max: 30, tip: 'Añade elevaciones de gemelo a una pierna o sóleo sentado.' },
+  antebrazo:  { short: 'Antebrazo',  name: 'Antebrazo (muñeca)', tier: 'prioridad', min: 10, max: 20, tip: 'Curl de muñeca, extensión y curl martillo con mancuernas.' },
+  agarre:     { short: 'Agarre',     name: 'Agarre (sujeción)',  tier: 'prioridad', min: 10, max: 20, tip: 'Sujeción pesada con mancuernas o colgado en barra.' },
+  cuadriceps: { short: 'Cuádriceps', name: 'Cuádriceps',         tier: 'base', min: 12, max: 24, tip: 'Sentadilla búlgara o zancadas con mancuernas.' },
+  gluteo:     { short: 'Glúteo',     name: 'Glúteo',             tier: 'base', min: 10, max: 20, tip: 'Hip thrust a una pierna o zancadas.' },
+  isquios:    { short: 'Isquios',    name: 'Isquios',            tier: 'base', min: 8,  max: 18, tip: 'Peso muerto rumano con mancuernas en el día de pesas.' },
+  espalda:    { short: 'Espalda',    name: 'Espalda y tirón',    tier: 'base', min: 10, max: 20, tip: 'El sled pull y el remo la exigen: remo con mancuerna en el día de pesas.' },
+  hombro:     { short: 'Hombro',     name: 'Hombro',             tier: 'base', min: 8,  max: 16, tip: 'Press de hombro con mancuernas o pike push ups.' },
+  core:       { short: 'Core',       name: 'Core',               tier: 'base', min: 10, max: 20, tip: 'Planchas y sujeción a una mano (suitcase carry).' },
+  pecho:      { short: 'Pecho',      name: 'Pecho y tríceps',    tier: 'mantenimiento', min: 6, max: 12, tip: 'Añade flexiones o fondos en el día de pesas.' },
 };
+const TIERS = [['prioridad', 'Tus prioridades'], ['base', 'Base Hyrox'], ['mantenimiento', 'Mantenimiento']];
 
 const WARMUP = {
   id: 'calentamiento',
@@ -61,21 +66,21 @@ const SESSIONS = [
     blocks: [
       { id: 'sujecion', title: 'Sujeción', rounds: ['3 series', '4 series', '4 series'], pause: 'pausa 45 s', sets: [3, 4, 4],
         items: [
-          { name: 'Sujeción con 2 mancuernas', video: YT('dumbbell farmers hold'), dose: ['máx · 2×20 kg', 'máx · 2×22-24 kg', 'máx · 2×26 kg'], muscles: ['agarre'] },
+          { name: 'Sujeción con 2 mancuernas', video: YT('dumbbell farmers hold'), dose: ['máx · 2×20 kg', 'máx · 2×22-24 kg', 'máx · 2×26 kg'], muscles: ['agarre', 'core'] },
         ] },
       { id: 'muneca', title: 'Muñeca', rounds: ['3 rondas', '3 rondas', '4 rondas'], pause: '45 s al final', sets: [3, 3, 4],
         items: [
-          { name: 'Curl de muñeca', video: YT('dumbbell wrist curl'), dose: ['15 · 6-8 kg', '15 · 8-10 kg', '12 · 10-12 kg'], muscles: ['agarre'] },
-          { name: 'Extensión de muñeca', video: YT('dumbbell reverse wrist curl'), dose: ['15 · 4-6 kg', '15 · 6-8 kg', '12 · 8-10 kg'], muscles: ['agarre'] },
+          { name: 'Curl de muñeca', video: YT('dumbbell wrist curl'), dose: ['15 · 6-8 kg', '15 · 8-10 kg', '12 · 10-12 kg'], muscles: ['antebrazo'] },
+          { name: 'Extensión de muñeca', video: YT('dumbbell reverse wrist curl'), dose: ['15 · 4-6 kg', '15 · 6-8 kg', '12 · 8-10 kg'], muscles: ['antebrazo'] },
         ] },
       { id: 'antebrazo', title: 'Antebrazo', rounds: ['3 rondas', '3 rondas', '4 rondas'], pause: '45 s al final', sets: [3, 3, 4],
         items: [
-          { name: 'Curl martillo', video: YT('dumbbell hammer curl proper form'), dose: ['12 · 10-12 kg', '12 · 12-14 kg', '10 · 14-16 kg'], muscles: ['agarre'] },
-          { name: 'Prono-supinación', video: YT('dumbbell pronation supination forearm'), dose: ['12', '12', '15'], muscles: ['agarre'] },
+          { name: 'Curl martillo', video: YT('dumbbell hammer curl proper form'), dose: ['12 · 10-12 kg', '12 · 12-14 kg', '10 · 14-16 kg'], muscles: ['antebrazo'] },
+          { name: 'Prono-supinación', video: YT('dumbbell pronation supination forearm'), dose: ['12', '12', '15'], muscles: ['antebrazo'] },
         ] },
       { id: 'rodillo', title: 'Rodillo', rounds: ['2 rondas', '3 rondas', '3 rondas'], pause: '', sets: [2, 3, 3],
         items: [
-          { name: 'Rodillo de muñeca casero', video: YT('homemade wrist roller'), dose: ['subir y bajar', 'subir y bajar', 'más peso'], muscles: ['agarre'] },
+          { name: 'Rodillo de muñeca casero', video: YT('homemade wrist roller'), dose: ['subir y bajar', 'subir y bajar', 'más peso'], muscles: ['antebrazo'] },
         ] },
     ],
   },
@@ -133,9 +138,9 @@ const SESSIONS = [
         ] },
       { id: 'agarre', title: 'Agarre', rounds: ['3 rondas', '3 rondas', '3 rondas'], pause: '45 s al final', sets: [3, 3, 3],
         items: [
-          { name: 'Sujeción con 2 mancuernas', video: YT('dumbbell farmers hold'), dose: ['45 s', '60 s', '60 s, más peso'], muscles: ['agarre'] },
-          { name: 'Escurrir toalla mojada', video: YT('towel wringing grip exercise'), dose: ['10 por sentido', '12 por sentido', '15 por sentido'], muscles: ['agarre'] },
-          { name: 'Extensión de dedos con goma', video: YT('rubber band finger extension exercise'), dose: ['25', '30', '30, goma más dura'], muscles: ['agarre'] },
+          { name: 'Sujeción con 2 mancuernas', video: YT('dumbbell farmers hold'), dose: ['45 s', '60 s', '60 s, más peso'], muscles: ['agarre', 'core'] },
+          { name: 'Escurrir toalla mojada', video: YT('towel wringing grip exercise'), dose: ['10 por sentido', '12 por sentido', '15 por sentido'], muscles: ['agarre', 'antebrazo'] },
+          { name: 'Extensión de dedos con goma', video: YT('rubber band finger extension exercise'), dose: ['25', '30', '30, goma más dura'], muscles: ['antebrazo'] },
         ] },
     ],
   },
